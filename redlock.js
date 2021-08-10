@@ -59,7 +59,8 @@ const defaults = {
 	driftFactor: 0.01,
 	retryCount:  10,
 	retryDelay:  200,
-	retryJitter: 100
+	retryJitter: 100,
+	acquireTimeout: 5000
 };
 
 
@@ -362,6 +363,9 @@ Redlock.prototype._lock = function _lock(resource, value, ttl, options, callback
 		// the number of times we have attempted this lock
 		let attempts = 0;
 
+		let acquireTimeout = options.acquireTimeout || self.acquireTimeout;
+		const endTime = Date.now() + acquireTimeout;
+
 		// create a new lock
 		if(value === null) {
 			value = self._random();
@@ -422,6 +426,10 @@ Redlock.prototype._lock = function _lock(resource, value, ttl, options, callback
 
 				// remove this lock from servers that voted for it
 				return lock.unlock(function(){
+					// ACQUIRE TIMEOUT
+					if (Date.now() >= endTime) {
+						return reject(new LockError('Exceeded ' + acquireTimeout + 'ms acquistion timeout to lock the resource "' + resource + '".', attempts));
+					}
 
 					// RETRY
 					if(retryCount === -1 || attempts <= retryCount)
